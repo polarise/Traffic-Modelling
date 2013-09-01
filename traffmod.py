@@ -25,8 +25,11 @@ class Car( object ):
 		self.velocity = velocity
 		self.position = 0
 		self.car_ahead = car_ahead
+		self.cumul_time = 0
+		self.visible = False
 	
 	def advance( self, dt ):
+		self.cumul_time += dt
 		self.position += self.velocity*dt
 		if self.car_ahead == None:
 			return
@@ -88,6 +91,10 @@ class Road( object ):
 			return
 		for c in self.cars:
 			c.advance( dt )
+			if c.position <= self.length:
+				c.visible = True
+			elif c.position > self.length:
+				c.visible = False
 		return
 		
 	def update_rev( self, dt ):
@@ -95,7 +102,24 @@ class Road( object ):
 			return
 		for c in self.srac:
 			c.advance( dt )
+			if c.position <= self.length:
+				c.visible = True
+			elif c.position > self.length:
+				c.visible = False
 		return
+
+	def get_cumul_time( self ):
+		cars_cumul_time = 0
+		for c in self.cars:
+			if c.visible:
+				cars_cumul_time += c.cumul_time
+		
+		srac_cumul_time = 0
+		for c in self.srac:
+			if c.visible:
+				srac_cumul_time += c.cumul_time
+		
+		return cars_cumul_time, srac_cumul_time
 	
 	def operate( self, dt ):
 		while True:
@@ -105,7 +129,9 @@ class Road( object ):
 				self.add_car_rev()
 			self.update_for( dt )
 			self.update_rev( dt )
+			T_cars, T_srac = self.get_cumul_time()
 			print self.distribution
+			print "Cumulative time: %s (for); %s (rev)" % ( T_cars, T_srac )
 			print self
 			time.sleep( dt )
 
