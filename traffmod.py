@@ -44,7 +44,7 @@ class Road( object ):
 		self.distribution = distribution
 		self.cars = list()
 		self.srac = list()
-		self.appear_prob = 0.8 # probability of a new car
+		self.alpha = 1 # 1 car per second - Poisson parameter multiplied by dt
 		
 	def __repr__( self ):
 		lane1 = [ " " ]*self.length
@@ -122,23 +122,28 @@ class Road( object ):
 		return cars_cumul_time, srac_cumul_time
 	
 	def operate( self, dt ):
-		while True:
-			if random.random() <= self.appear_prob:
-				self.add_car_for()
-			if random.random() <= self.appear_prob:
-				self.add_car_rev()
-			self.update_for( dt )
-			self.update_rev( dt )
-			T_cars, T_srac = self.get_cumul_time()
-			print self.distribution
-			print "Cumulative time: %s (for); %s (rev)" % ( T_cars, T_srac )
-			print self
-			time.sleep( dt )
+		p = 1 - scipy.exp( -self.alpha*dt )  # probability of at least one car in dt
+		with open( "cumul_time.txt", 'w' ) as f:
+			T = 0
+			while True:
+				if random.random() <= p:
+					self.add_car_for()
+				if random.random() <= p:
+					self.add_car_rev()
+				self.update_for( dt )
+				self.update_rev( dt )
+				T_cars, T_srac = self.get_cumul_time()
+				print self.distribution
+				print "Cumulative time: %s (for); %s (rev)" % ( T_cars, T_srac )
+				print >> f, "%s\t%s\t%s" % ( T, T_cars, T_srac )
+				print self
+				time.sleep( dt )
+				T += dt
 
 if __name__ == "__main__":
 	distr = Distribution( [5, 9, 15, 20], [ .15, .20, .50, .15 ] )
 	road = Road( "My Road", 130, distr )
 	try:
-		road.operate( 1 )
+		road.operate( 0.1 )
 	except KeyboardInterrupt:
 		sys.exit( 0 )
