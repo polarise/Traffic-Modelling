@@ -8,19 +8,11 @@ import scipy.stats
 
 class Distribution( object ):
 	def __init__( self, Vmax ):
-#		self.C = len( V	)				# no. of V categories
 		self.V = Vmax
-#		self.P = P
-#		self.velocities = list()
-
-#		for i in xrange( self.C ):
-#			self.velocities += [ V[i] ]*int( P[i]*1000 )
 		self.velocities = list( scipy.stats.truncnorm.rvs( 0, self.V, loc=5, scale=10, size=1000 ))
 	
 	def __repr__( self ):
 		return "Velocities are drawn from a truncated normal on [0,%s] with mu=%s, sigma=%s." % ( self.V, 5, 10 )
-#		return "There are %s velocity categories. " % ( self.C ) + "These are [m/s]: " + "; ".join( map( str, self.V ))
-		
 
 class Car( object ):
 	def __init__( self, velocity, car_ahead ):
@@ -38,115 +30,104 @@ class Car( object ):
 		elif self.position >= self.car_ahead.position:
 			self.position = self.car_ahead.position - 1
 			return
-		
-class Road( object ):
-	def __init__( self, name, length, distribution ):
+			
+class Lane( object ):
+	def __init__( self, name, length, direction, distribution, alpha=1 ):
 		self.name = name
 		self.length = length
+		self.direction = direction
 		self.distribution = distribution
+		self.alpha = alpha
+		
 		self.cars = list()
-		self.srac = list()
-		self.alpha = 1 # 1 car per second - Poisson parameter multiplied by dt
+	
+	def __repr__( self ):
+		lane = [ " " ] * self.length
+		
+		for c in self.cars:
+			if c.position < self.length:
+				if self.direction == "right": lane[ int( c.position ) ] = ">"
+				elif self.direction == "left": lane[ int( c.position ) ] = "<"
+		
+		lane_str = "".join( lane )
+		
+		if self.direction == "right":
+			return lane_str
+		elif self.direction == "left":
+			return lane_str[::-1]
+		
+	def add_car( self, dt ):
+		p = 1 - scipy.exp( -self.alpha * dt )
+		if random.random() <= p:		
+			velocity = random.choice( self.distribution.velocities )
+			if len( self.cars ) == 0:
+				car_ahead = None
+			else:
+				car_ahead = self.cars[-1]
+			self.cars.append( Car( velocity, car_ahead ))
+			return
+		else:
+			return
+	
+	def update( self, dt ):				# update the positions
+		if len( self.cars ) == 0: 
+			return
+		for c in self.cars:
+			c.advance( dt )
+			if c.position <= self.length:
+				c.visible = True
+			elif c.position > self.length:
+				c.visible = False
+		return
+	
+	def get_cumul_time( self ):
+		cumul_time = 0
+		for c in self.cars:
+			if c.visible:
+				cumul_time += c.cumul_time
+			
+		return cumul_time
+		
+class Road( object ):
+	def __init__( self, name, lanes ): # lanes is a list of lanes
+		self.name = name
+		self.lanes = lanes
+		self.length = lanes[0].length
 		
 	def __repr__( self ):
-		lane1 = [ " " ]*self.length
-		lane2 = [ " " ]*self.length
+		kerb = "-" * self.length
+		lanes = [ lane.__repr__() for lane in self.lanes ]
 		
-		top = "-" * self.length
-		
-		for c in self.cars:
-			if c.position < self.length:
-				lane1[ int( c.position ) ] = ">"
-		
-		for c in self.srac:
-			if c.position < self.length:
-				lane2[ int( c.position ) ] = "<"
-			
-		lane1_str = "".join( lane1 )
-		lane2_str = "".join( lane2 )
-		
-		bot = "-" * self.length
-		
-		return top + "\n" + lane1_str + "\n" + lane2_str[::-1] + "\n" + bot
-		
-	def add_car_for( self ):
-		# pick a velocity category
-		velocity = random.choice( self.distribution.velocities )
-		if len( self.cars ) == 0:
-			car_ahead = None
-		else:
-			car_ahead = self.cars[-1]
-		self.cars.append( Car( velocity, car_ahead ))
-		return
-		
-	def add_car_rev( self ):
-		velocity = random.choice( self.distribution.velocities )
-		if len( self.srac ) == 0:
-			car_ahead = None
-		else:
-			car_ahead = self.srac[-1]
-		self.srac.append( Car( velocity, car_ahead ))
-		
-	def update_for( self, dt ):
-		# update the positions
-		if len( self.cars ) == 0:
-			return
-		for c in self.cars:
-			c.advance( dt )
-			if c.position <= self.length:
-				c.visible = True
-			elif c.position > self.length:
-				c.visible = False
-		return
-		
-	def update_rev( self, dt ):
-		if len( self.srac ) == 0:
-			return
-		for c in self.srac:
-			c.advance( dt )
-			if c.position <= self.length:
-				c.visible = True
-			elif c.position > self.length:
-				c.visible = False
-		return
+		return "\n".join( [ kerb ] + lanes + [ kerb ] )
 
-	def get_cumul_time( self ):
-		cars_cumul_time = 0
-		for c in self.cars:
-			if c.visible:
-				cars_cumul_time += c.cumul_time
-		
-		srac_cumul_time = 0
-		for c in self.srac:
-			if c.visible:
-				srac_cumul_time += c.cumul_time
-		
-		return cars_cumul_time, srac_cumul_time
-	
 	def operate( self, dt ):
-		p = 1 - scipy.exp( -self.alpha*dt )  # probability of at least one car in dt
 		with open( "cumul_time.txt", 'w' ) as f:
 			T = 0
 			while True:
-				if random.random() <= p:
-					self.add_car_for()
-				if random.random() <= p:
-					self.add_car_rev()
-				self.update_for( dt )
-				self.update_rev( dt )
-				T_cars, T_srac = self.get_cumul_time()
-				print self.distribution
-				print "Cumulative time: %s (for); %s (rev)" % ( T_cars, T_srac )
-				print >> f, "%s\t%s\t%s" % ( T, T_cars, T_srac )
+				cumul_time = list()
+				for lane in self.lanes:
+					lane.add_car( dt ) # add a car with P = 1 - exp( -lambda*dt )
+					lane.update( dt )
+					cumul_time += [ lane.get_cumul_time() ]
+				print "Cumulative time: %s" % "|".join( map( str, cumul_time ))
+				for lane in self.lanes:
+					print lane.distribution
 				print self
+				print >> f, "%s\t%s" % ( T, "\t".join( map( str, cumul_time )))
 				time.sleep( dt )
 				T += dt
+				
 
 if __name__ == "__main__":
-#	distr = Distribution( [5, 9, 15, 20], [ .15, .20, .50, .15 ] )
-	distr = Distribution( 30 )
-	road = Road( "My Road", 130, distr )
+	distr1 = Distribution( 30 )
+	distr2 = Distribution( 20 )
+	lane1 = Lane( "Lane1", 130, "right", distr1 )
+	lane2 = Lane( "Lane2", 130, "left", distr2 )
+	lane3 = Lane( "Lane3", 130, "right", distr2 )
+	lane4 = Lane( "Lane4", 130, "left", distr1 )
+	road = Road( "My Road", [ lane1, lane3, lane2, lane4 ] )
 	try:
-		road.operate( 0.05 )
+		road.operate( 0.1 )
 	except KeyboardInterrupt:
+		print
 		sys.exit( 0 )
