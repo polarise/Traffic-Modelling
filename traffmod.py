@@ -7,17 +7,19 @@ import scipy
 import scipy.stats
 
 class Distribution( object ):
-	def __init__( self, V, P ):
-		self.C = len( V	)				# no. of V categories
-		self.V = V
-		self.P = P
-		self.velocities = list()
+	def __init__( self, Vmax ):
+#		self.C = len( V	)				# no. of V categories
+		self.V = Vmax
+#		self.P = P
+#		self.velocities = list()
 
-		for i in xrange( self.C ):
-			self.velocities += [ V[i] ]*int( P[i]*1000 )
+#		for i in xrange( self.C ):
+#			self.velocities += [ V[i] ]*int( P[i]*1000 )
+		self.velocities = list( scipy.stats.truncnorm.rvs( 0, self.V, loc=5, scale=10, size=1000 ))
 	
 	def __repr__( self ):
-		return "There are %s velocity categories. " % ( self.C ) + "These are [m/s]: " + "; ".join( map( str, self.V ))
+		return "Velocities are drawn from a truncated normal on [0,%s] with mu=%s, sigma=%s." % ( self.V, 5, 10 )
+#		return "There are %s velocity categories. " % ( self.C ) + "These are [m/s]: " + "; ".join( map( str, self.V ))
 		
 
 class Car( object ):
@@ -141,9 +143,10 @@ class Road( object ):
 				T += dt
 
 if __name__ == "__main__":
-	distr = Distribution( [5, 9, 15, 20], [ .15, .20, .50, .15 ] )
+#	distr = Distribution( [5, 9, 15, 20], [ .15, .20, .50, .15 ] )
+	distr = Distribution( 30 )
 	road = Road( "My Road", 130, distr )
 	try:
-		road.operate( 0.1 )
+		road.operate( 0.05 )
 	except KeyboardInterrupt:
 		sys.exit( 0 )
